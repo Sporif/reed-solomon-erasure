@@ -1,10 +1,9 @@
+#![allow(clippy::needless_range_loop)]
+
 use std::env;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-
-#[cfg(feature = "simd-accel")]
-extern crate cc;
 
 const FIELD_SIZE: usize = 256;
 
@@ -17,7 +16,7 @@ fn gen_log_table(polynomial: usize) -> [u8; FIELD_SIZE] {
     for log in 0..FIELD_SIZE - 1 {
         result[b] = log as u8;
 
-        b = b << 1;
+        b <<= 1;
 
         if FIELD_SIZE <= b {
             b = (b - FIELD_SIZE) ^ polynomial;
@@ -143,56 +142,12 @@ fn write_tables() {
     write_table!(1D => f, exp_table,      "EXP_TABLE",      "u8");
     write_table!(2D => f, mul_table,      "MUL_TABLE",      "u8");
 
-    if cfg!(feature = "simd-accel") {
-        let (mul_table_low, mul_table_high) = gen_mul_table_half(&log_table, &exp_table);
+    let (mul_table_low, mul_table_high) = gen_mul_table_half(&log_table, &exp_table);
 
-        write_table!(2D => f, mul_table_low,  "MUL_TABLE_LOW",  "u8");
-        write_table!(2D => f, mul_table_high, "MUL_TABLE_HIGH", "u8");
-    }
+    write_table!(2D => f, mul_table_low,  "MUL_TABLE_LOW",  "u8");
+    write_table!(2D => f, mul_table_high, "MUL_TABLE_HIGH", "u8");
 }
-
-#[cfg(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-))]
-fn compile_simd_c() {
-    fn guess_target_cpu() -> String {
-        // Copied and adapted from https://github.com/alexcrichton/proc-macro2/blob/4173a21dc497c67326095e438ff989cc63cd9279/build.rs#L115
-        // Licensed under Apache-2.0 + MIT (compatible because we're MIT)
-        let rustflags = env::var_os("RUSTFLAGS");
-        if let Some(rustflags) = rustflags {
-            for mut flag in rustflags.to_string_lossy().split(' ') {
-                if flag.starts_with("-C") {
-                    flag = &flag["-C".len()..];
-                }
-                if flag.starts_with("target-cpu=") {
-                    return flag["target-cpu=".len()..].to_owned()
-                }
-            }
-        }
-
-        "native".to_string()
-    }
-
-    cc::Build::new()
-        .opt_level(3)
-        .flag(&format!("-march={}", guess_target_cpu()))
-        .flag("-std=c11")
-        .file("simd_c/reedsolomon.c")
-        .compile("reedsolomon");
-}
-
-#[cfg(not(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-)))]
-fn compile_simd_c() {}
 
 fn main() {
-    compile_simd_c();
     write_tables();
 }

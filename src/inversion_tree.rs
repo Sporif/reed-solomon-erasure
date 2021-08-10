@@ -23,8 +23,8 @@ pub struct InversionNode<F: Field> {
 }
 
 impl<F: Field> InversionTree<F> {
-    pub fn new(data_shards: usize, parity_shards: usize) -> InversionTree<F> {
-        InversionTree {
+    pub fn new(data_shards: usize, parity_shards: usize) -> Self {
+        Self {
             root: Mutex::new(InversionNode::new(
                 Some(Arc::new(Matrix::identity(data_shards))),
                 data_shards + parity_shards,
@@ -34,7 +34,7 @@ impl<F: Field> InversionTree<F> {
     }
 
     pub fn get_inverted_matrix(&self, invalid_indices: &[usize]) -> Option<Arc<Matrix<F>>> {
-        if invalid_indices.len() == 0 {
+        if invalid_indices.is_empty() {
             match self.root.lock().unwrap().matrix {
                 None => panic!(),
                 Some(ref x) => return Some(Arc::clone(x)),
@@ -54,7 +54,7 @@ impl<F: Field> InversionTree<F> {
     ) -> Result<(), Error> {
         // If no invalid indices were given then we are done because the
         // root node is already set with the identity matrix.
-        if invalid_indices.len() == 0 {
+        if invalid_indices.is_empty() {
             return Err(Error::AlreadySet);
         }
 
@@ -78,20 +78,20 @@ impl<F: Field> InversionTree<F> {
 }
 
 impl<F: Field> InversionNode<F> {
-    pub fn new(matrix: Option<Arc<Matrix<F>>>, children_count: usize) -> InversionNode<F> {
+    pub fn new(matrix: Option<Arc<Matrix<F>>>, children_count: usize) -> Self {
         let mut children = Vec::with_capacity(children_count);
         for _ in 0..children_count {
             children.push(None);
         }
-        InversionNode { matrix, children }
+        Self { matrix, children }
     }
 
-    fn get_child<'a>(
-        &'a mut self,
+    fn get_child(
+        &mut self,
         offset: usize,
         requested_index: usize,
         total_shards: usize,
-    ) -> &'a mut InversionNode<F> {
+    ) -> &mut Self {
         let node_index = requested_index - offset;
         {
             let node = &mut self.children[node_index];
@@ -102,9 +102,9 @@ impl<F: Field> InversionNode<F> {
                 Some(_) => {}
             }
         }
-        match self.children[node_index] {
-            None => panic!(),
-            Some(ref mut x) => x,
+        match self.children.get_mut(node_index) {
+            None | Some(None) => panic!(),
+            Some(Some(ref mut x)) => x,
         }
     }
 
@@ -114,11 +114,8 @@ impl<F: Field> InversionNode<F> {
         total_shards: usize,
         offset: usize,
     ) -> Option<Arc<Matrix<F>>> {
-        if invalid_indices.len() == 0 {
-            match self.matrix {
-                None => None,
-                Some(ref m) => Some(Arc::clone(m)),
-            }
+        if invalid_indices.is_empty() {
+            self.matrix.as_ref().map(|m| Arc::clone(m))
         } else {
             let requested_index = invalid_indices[0];
             let remaining_indices = &invalid_indices[1..];
@@ -134,7 +131,7 @@ impl<F: Field> InversionNode<F> {
         total_shards: usize,
         offset: usize,
     ) {
-        if invalid_indices.len() == 0 {
+        if invalid_indices.is_empty() {
             self.matrix = Some(Arc::clone(matrix));
         } else {
             let requested_index = invalid_indices[0];
@@ -145,20 +142,19 @@ impl<F: Field> InversionNode<F> {
                     remaining_indices,
                     total_shards,
                     requested_index + 1,
-                )
+                );
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use rand;
 
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use super::*;
     use crate::galois_8;
-    use crate::inversion_tree::*;
     use crate::matrix::Matrix;
 
     use quickcheck::{Arbitrary, Gen, QuickCheck};
@@ -238,7 +234,7 @@ mod tests {
         let matrix1 = Matrix::make_random(3);
         let matrix2 = Matrix::make_random(3);
 
-        let matrix_copy1 = matrix1.clone();
+        let matrix_copy1 = matrix1;
         let matrix_copy2 = matrix2.clone();
 
         tree.insert_inverted_matrix(&[1], &Arc::new(matrix_copy1))
@@ -331,7 +327,7 @@ mod tests {
                 iter_order.push(rand::random::<usize>());
             }
 
-            QCTreeTestParam {
+            Self {
                 data_shards: 1 + size % 50,
                 parity_shards: 1 + size % 50,
                 matrix_count,
@@ -352,6 +348,7 @@ mod tests {
 
     // inversion tree is functionally the same as a map
     // but more efficient
+    #[allow(clippy::needless_pass_by_value)]
     fn qc_tree_same_as_hash_map_prop(param: QCTreeTestParam) -> bool {
         let tree: InversionTree<galois_8::Field> =
             InversionTree::new(param.data_shards, param.parity_shards);
@@ -375,8 +372,8 @@ mod tests {
 
         for _ in 0..param.read_count {
             // iterate according to the provided order
-            if invalid_indices_set.len() > 0 {
-                for i in param.iter_order.iter() {
+            if !invalid_indices_set.is_empty() {
+                for i in &param.iter_order {
                     let i = i % invalid_indices_set.len();
 
                     let invalid_indices = &invalid_indices_set[i];
@@ -390,18 +387,18 @@ mod tests {
             }
 
             // iterate through the insertion order
-            for ref invalid_indices in invalid_indices_set.iter() {
+            for invalid_indices in &invalid_indices_set {
                 let matrix_in_tree = tree.get_inverted_matrix(invalid_indices).unwrap();
-                let matrix_in_map = map.get(*invalid_indices).unwrap();
+                let matrix_in_map = map.get(invalid_indices).unwrap();
                 if matrix_in_tree.as_ref() != matrix_in_map {
                     return false;
                 }
             }
 
             // iterate through the map's order
-            for (ref invalid_indices, ref matrix_in_map) in map.iter() {
+            for (invalid_indices, matrix_in_map) in &map {
                 let matrix_in_tree = tree.get_inverted_matrix(invalid_indices).unwrap();
-                if matrix_in_tree.as_ref() != *matrix_in_map {
+                if matrix_in_tree.as_ref() != matrix_in_map {
                     return false;
                 }
             }

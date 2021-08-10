@@ -133,9 +133,8 @@ impl<'a, F: 'a + Field> ShardByShard<'a, F> {
         self.cur_input
     }
 
-    fn return_ok_and_incre_cur_input(&mut self) -> Result<(), SBSError> {
+    fn incre_cur_input(&mut self) {
         self.cur_input += 1;
-        Ok(())
     }
 
     fn sbs_encode_checks<U: AsRef<[F::Elem]> + AsMut<[F::Elem]>>(
@@ -196,7 +195,8 @@ impl<'a, F: 'a + Field> ShardByShard<'a, F> {
 
         self.codec.encode_single(self.cur_input, shards).unwrap();
 
-        self.return_ok_and_incre_cur_input()
+        self.incre_cur_input();
+        Ok(())
     }
 
     /// Constructs the parity shards partially using the current input data shard.
@@ -214,7 +214,8 @@ impl<'a, F: 'a + Field> ShardByShard<'a, F> {
             .encode_single_sep(self.cur_input, data[self.cur_input].as_ref(), parity)
             .unwrap();
 
-        self.return_ok_and_incre_cur_input()
+        self.incre_cur_input();
+        Ok(())
     }
 }
 
@@ -338,14 +339,14 @@ pub struct ReedSolomon<F: Field> {
 }
 
 impl<F: Field> Clone for ReedSolomon<F> {
-    fn clone(&self) -> ReedSolomon<F> {
-        ReedSolomon::new(self.data_shard_count, self.parity_shard_count)
+    fn clone(&self) -> Self {
+        Self::new(self.data_shard_count, self.parity_shard_count)
             .expect("basic checks already passed as precondition of existence of self")
     }
 }
 
 impl<F: Field> PartialEq for ReedSolomon<F> {
-    fn eq(&self, rhs: &ReedSolomon<F>) -> bool {
+    fn eq(&self, rhs: &Self) -> bool {
         self.data_shard_count == rhs.data_shard_count
             && self.parity_shard_count == rhs.parity_shard_count
     }
@@ -430,7 +431,7 @@ impl<F: Field> ReedSolomon<F> {
     /// Returns `Error::TooFewParityShards` if `parity_shards == 0`.
     ///
     /// Returns `Error::TooManyShards` if `data_shards + parity_shards > F::ORDER`.
-    pub fn new(data_shards: usize, parity_shards: usize) -> Result<ReedSolomon<F>, Error> {
+    pub fn new(data_shards: usize, parity_shards: usize) -> Result<Self, Error> {
         if data_shards == 0 {
             return Err(Error::TooFewDataShards);
         }
@@ -445,7 +446,7 @@ impl<F: Field> ReedSolomon<F> {
 
         let matrix = Self::build_matrix(data_shards, total_shards);
 
-        Ok(ReedSolomon {
+        Ok(Self {
             data_shard_count: data_shards,
             parity_shard_count: parity_shards,
             total_shard_count: total_shards,
@@ -473,12 +474,11 @@ impl<F: Field> ReedSolomon<F> {
         outputs: &mut [U],
     ) {
         for i_input in 0..self.data_shard_count {
-            self.code_single_slice(matrix_rows, i_input, inputs[i_input].as_ref(), outputs);
+            Self::code_single_slice(matrix_rows, i_input, inputs[i_input].as_ref(), outputs);
         }
     }
 
     fn code_single_slice<U: AsMut<[F::Elem]>>(
-        &self,
         matrix_rows: &[&[F::Elem]],
         i_input: usize,
         input: &[F::Elem],
@@ -493,7 +493,7 @@ impl<F: Field> ReedSolomon<F> {
             } else {
                 F::mul_slice_add(matrix_row_to_use, input, output);
             }
-        })
+        });
     }
 
     fn check_some_slices_with_buffer<T, U>(
@@ -574,7 +574,7 @@ impl<F: Field> ReedSolomon<F> {
         let parity_rows = self.get_parity_rows();
 
         // Do the coding.
-        self.code_single_slice(&parity_rows, i_data, single_data, parity);
+        Self::code_single_slice(&parity_rows, i_data, single_data, parity);
 
         Ok(())
     }
@@ -689,7 +689,7 @@ impl<F: Field> ReedSolomon<F> {
     ) -> Arc<Matrix<F>> {
         // Attempt to get the cached inverted matrix out of the tree
         // based on the indices of the invalid rows.
-        match self.tree.get_inverted_matrix(&invalid_indices) {
+        match self.tree.get_inverted_matrix(invalid_indices) {
             // If the inverted matrix isn't cached in the tree yet we must
             // construct it ourselves and insert it into the tree for the
             // future.  In this way the inversion tree is lazily loaded.
@@ -714,7 +714,7 @@ impl<F: Field> ReedSolomon<F> {
                 // Cache the inverted matrix in the tree for future use keyed on the
                 // indices of the invalid rows.
                 self.tree
-                    .insert_inverted_matrix(&invalid_indices, &data_decode_matrix)
+                    .insert_inverted_matrix(invalid_indices, &data_decode_matrix)
                     .unwrap();
 
                 data_decode_matrix
@@ -845,7 +845,7 @@ impl<F: Field> ReedSolomon<F> {
 
         for i_slice in invalid_indices
             .iter()
-            .cloned()
+            .copied()
             .take_while(|i| i < &data_shard_count)
         {
             matrix_rows.push(data_decode_matrix.get_row(i_slice));
@@ -868,7 +868,7 @@ impl<F: Field> ReedSolomon<F> {
 
             for i_slice in invalid_indices
                 .iter()
-                .cloned()
+                .copied()
                 .skip_while(|i| i < &data_shard_count)
             {
                 matrix_rows.push(parity_rows[i_slice - data_shard_count]);
@@ -897,7 +897,7 @@ impl<F: Field> ReedSolomon<F> {
 
                 for i_slice in invalid_indices
                     .iter()
-                    .cloned()
+                    .copied()
                     .take_while(|i| i < &data_shard_count)
                 {
                     push_good_up_to(&mut all_data_slices, i_slice);

@@ -2,6 +2,14 @@
 
 include!(concat!(env!("OUT_DIR"), "/table.rs"));
 
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+))]
+use crate::platform::Platform;
+
 /// The field GF(2^8).
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub struct Field;
@@ -39,11 +47,11 @@ impl crate::Field for Field {
     }
 
     fn mul_slice(c: u8, input: &[u8], out: &mut [u8]) {
-        mul_slice(c, input, out)
+        mul_slice(c, input, out);
     }
 
     fn mul_slice_add(c: u8, input: &[u8], out: &mut [u8]) {
-        mul_slice_xor(c, input, out)
+        mul_slice_xor(c, input, out);
     }
 }
 
@@ -54,13 +62,13 @@ pub type ReedSolomon = crate::ReedSolomon<Field>;
 pub type ShardByShard<'a> = crate::ShardByShard<'a, Field>;
 
 /// Add two elements.
-pub fn add(a: u8, b: u8) -> u8 {
+pub const fn add(a: u8, b: u8) -> u8 {
     a ^ b
 }
 
 /// Subtract `b` from `a`.
 #[cfg(test)]
-pub fn sub(a: u8, b: u8) -> u8 {
+pub const fn sub(a: u8, b: u8) -> u8 {
     a ^ b
 }
 
@@ -102,7 +110,7 @@ pub fn exp(a: u8, n: usize) -> u8 {
     }
 }
 
-const PURE_RUST_UNROLL: isize = 4;
+const PURE_UNROLL: isize = 4;
 
 macro_rules! return_if_empty {
     (
@@ -114,27 +122,7 @@ macro_rules! return_if_empty {
     };
 }
 
-#[cfg(not(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-)))]
-pub fn mul_slice(c: u8, input: &[u8], out: &mut [u8]) {
-    mul_slice_pure_rust(c, input, out);
-}
-
-#[cfg(not(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-)))]
-pub fn mul_slice_xor(c: u8, input: &[u8], out: &mut [u8]) {
-    mul_slice_xor_pure_rust(c, input, out);
-}
-
-fn mul_slice_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
+fn mul_slice_pure(c: u8, input: &[u8], out: &mut [u8]) {
     let mt = &MUL_TABLE[c as usize];
     let mt_ptr: *const u8 = &mt[0];
 
@@ -148,18 +136,18 @@ fn mul_slice_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
 
     let mut n: isize = 0;
     unsafe {
-        assert_eq!(4, PURE_RUST_UNROLL);
-        if len > PURE_RUST_UNROLL {
-            let len_minus_unroll = len - PURE_RUST_UNROLL;
+        assert_eq!(4, PURE_UNROLL);
+        if len > PURE_UNROLL {
+            let len_minus_unroll = len - PURE_UNROLL;
             while n < len_minus_unroll {
                 *out_ptr = *mt_ptr.offset(*input_ptr as isize);
                 *out_ptr.offset(1) = *mt_ptr.offset(*input_ptr.offset(1) as isize);
                 *out_ptr.offset(2) = *mt_ptr.offset(*input_ptr.offset(2) as isize);
                 *out_ptr.offset(3) = *mt_ptr.offset(*input_ptr.offset(3) as isize);
 
-                input_ptr = input_ptr.offset(PURE_RUST_UNROLL);
-                out_ptr = out_ptr.offset(PURE_RUST_UNROLL);
-                n += PURE_RUST_UNROLL;
+                input_ptr = input_ptr.offset(PURE_UNROLL);
+                out_ptr = out_ptr.offset(PURE_UNROLL);
+                n += PURE_UNROLL;
             }
         }
         while n < len {
@@ -170,13 +158,9 @@ fn mul_slice_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
             n += 1;
         }
     }
-    /* for n in 0..input.len() {
-     *   out[n] = mt[input[n] as usize]
-     * }
-     */
 }
 
-fn mul_slice_xor_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
+fn mul_slice_xor_pure(c: u8, input: &[u8], out: &mut [u8]) {
     let mt = &MUL_TABLE[c as usize];
     let mt_ptr: *const u8 = &mt[0];
 
@@ -190,18 +174,18 @@ fn mul_slice_xor_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
 
     let mut n: isize = 0;
     unsafe {
-        assert_eq!(4, PURE_RUST_UNROLL);
-        if len > PURE_RUST_UNROLL {
-            let len_minus_unroll = len - PURE_RUST_UNROLL;
+        assert_eq!(4, PURE_UNROLL);
+        if len > PURE_UNROLL {
+            let len_minus_unroll = len - PURE_UNROLL;
             while n < len_minus_unroll {
                 *out_ptr ^= *mt_ptr.offset(*input_ptr as isize);
                 *out_ptr.offset(1) ^= *mt_ptr.offset(*input_ptr.offset(1) as isize);
                 *out_ptr.offset(2) ^= *mt_ptr.offset(*input_ptr.offset(2) as isize);
                 *out_ptr.offset(3) ^= *mt_ptr.offset(*input_ptr.offset(3) as isize);
 
-                input_ptr = input_ptr.offset(PURE_RUST_UNROLL);
-                out_ptr = out_ptr.offset(PURE_RUST_UNROLL);
-                n += PURE_RUST_UNROLL;
+                input_ptr = input_ptr.offset(PURE_UNROLL);
+                out_ptr = out_ptr.offset(PURE_UNROLL);
+                n += PURE_UNROLL;
             }
         }
         while n < len {
@@ -212,10 +196,177 @@ fn mul_slice_xor_pure_rust(c: u8, input: &[u8], out: &mut [u8]) {
             n += 1;
         }
     }
-    /* for n in 0..input.len() {
-     *   out[n] ^= mt[input[n] as usize];
-     * }
-     */
+}
+
+#[cfg(not(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+)))]
+pub fn mul_slice(c: u8, input: &[u8], out: &mut [u8]) {
+    mul_slice_pure(c, input, out);
+}
+
+#[cfg(not(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+)))]
+pub fn mul_slice_xor(c: u8, input: &[u8], out: &mut [u8]) {
+    mul_slice_xor_pure(c, input, out);
+}
+
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+))]
+pub fn mul_slice(c: u8, input: &[u8], out: &mut [u8]) {
+    let platform = Platform::detect();
+    if let Platform::Portable = platform {
+        mul_slice_pure(c, input, out);
+    } else {
+        mul_slice_simd(c, input, out, platform);
+    }
+}
+
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+))]
+pub fn mul_slice_xor(c: u8, input: &[u8], out: &mut [u8]) {
+    let platform = Platform::detect();
+    if let Platform::Portable = platform {
+        mul_slice_xor_pure(c, input, out);
+    } else {
+        mul_slice_xor_simd(c, input, out, platform);
+    }
+}
+
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+))]
+#[allow(unused_variables)]
+#[allow(unreachable_code)]
+pub fn mul_slice_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platform) {
+    let low: *const u8 = &MUL_TABLE_LOW[c as usize][0];
+    let high: *const u8 = &MUL_TABLE_HIGH[c as usize][0];
+
+    assert_eq!(input.len(), out.len());
+
+    let input_ptr: *const u8 = &input[0];
+    let out_ptr: *mut u8 = &mut out[0];
+    let size: usize = input.len();
+
+    let bytes_done: usize = match platform {
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::SSE3 => unsafe {
+            crate::galois_8_sse3::gal_mul(low, high, input_ptr, out_ptr, size)
+        },
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::AVX2 => unsafe {
+            crate::galois_8_avx2::gal_mul(low, high, input_ptr, out_ptr, size)
+        },
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::AVX512 => {
+            // AVX512 implementation not enabled by default.
+            #[cfg(feature = "unstable")]
+            {
+                unsafe { crate::galois_8_avx512::gal_mul(low, high, input_ptr, out_ptr, size) }
+            }
+            #[cfg(not(feature = "unstable"))]
+            {
+                unsafe { crate::galois_8_avx2::gal_mul(low, high, input_ptr, out_ptr, size) }
+            }
+        }
+        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+        Platform::NEON => {
+            // NEON implementation not enabled by default.
+            // Safe because detect() checked for platform support.
+            #[cfg(feature = "unstable")]
+            {
+                unsafe { crate::galois_8_neon::gal_mul(low, high, input_ptr, out_ptr, size) }
+            }
+            #[cfg(not(feature = "unstable"))]
+            {
+                return mul_slice_pure(c, input, out);
+            }
+        }
+        Platform::Portable => unreachable!(),
+    };
+
+    mul_slice_pure(c, &input[bytes_done..], &mut out[bytes_done..]);
+}
+
+#[cfg(any(
+    target_arch = "x86",
+    target_arch = "x86_64",
+    target_arch = "arm",
+    target_arch = "aarch64"
+))]
+#[allow(unused_variables)]
+#[allow(unreachable_code)]
+pub fn mul_slice_xor_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platform) {
+    let low: *const u8 = &MUL_TABLE_LOW[c as usize][0];
+    let high: *const u8 = &MUL_TABLE_HIGH[c as usize][0];
+
+    assert_eq!(input.len(), out.len());
+
+    let input_ptr: *const u8 = &input[0];
+    let out_ptr: *mut u8 = &mut out[0];
+    let size: usize = input.len();
+
+    let bytes_done: usize = match platform {
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::SSE3 => unsafe {
+            crate::galois_8_sse3::gal_mul_xor(low, high, input_ptr, out_ptr, size)
+        },
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::AVX2 => unsafe {
+            crate::galois_8_avx2::gal_mul_xor(low, high, input_ptr, out_ptr, size)
+        },
+        // Safe because detect() checked for platform support.
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        Platform::AVX512 => {
+            #[cfg(feature = "unstable")]
+            {
+                unsafe { crate::galois_8_avx512::gal_mul_xor(low, high, input_ptr, out_ptr, size) }
+            }
+            #[cfg(not(feature = "unstable"))]
+            {
+                unsafe { crate::galois_8_avx2::gal_mul_xor(low, high, input_ptr, out_ptr, size) }
+            }
+        }
+        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+        Platform::NEON => {
+            // NEON implementation not enabled by default.
+            // Safe because detect() checked for platform support.
+            #[cfg(feature = "unstable")]
+            {
+                unsafe { crate::galois_8_neon::gal_mul_xor(low, high, input_ptr, out_ptr, size) }
+            }
+            #[cfg(not(feature = "unstable"))]
+            {
+                return mul_slice_xor_pure(c, input, out);
+            }
+        }
+        Platform::Portable => unreachable!(),
+    };
+
+    mul_slice_xor_pure(c, &input[bytes_done..], &mut out[bytes_done..]);
 }
 
 #[cfg(test)]
@@ -230,18 +381,18 @@ fn slice_xor(input: &[u8], out: &mut [u8]) {
 
     let mut n: isize = 0;
     unsafe {
-        assert_eq!(4, PURE_RUST_UNROLL);
-        if len > PURE_RUST_UNROLL {
-            let len_minus_unroll = len - PURE_RUST_UNROLL;
+        assert_eq!(4, PURE_UNROLL);
+        if len > PURE_UNROLL {
+            let len_minus_unroll = len - PURE_UNROLL;
             while n < len_minus_unroll {
                 *out_ptr ^= *input_ptr;
                 *out_ptr.offset(1) ^= *input_ptr.offset(1);
                 *out_ptr.offset(2) ^= *input_ptr.offset(2);
                 *out_ptr.offset(3) ^= *input_ptr.offset(3);
 
-                input_ptr = input_ptr.offset(PURE_RUST_UNROLL);
-                out_ptr = out_ptr.offset(PURE_RUST_UNROLL);
-                n += PURE_RUST_UNROLL;
+                input_ptr = input_ptr.offset(PURE_UNROLL);
+                out_ptr = out_ptr.offset(PURE_UNROLL);
+                n += PURE_UNROLL;
             }
         }
         while n < len {
@@ -252,78 +403,10 @@ fn slice_xor(input: &[u8], out: &mut [u8]) {
             n += 1;
         }
     }
-    /* for n in 0..input.len() {
-     *   out[n] ^= input[n]
-     * }
-     */
-}
 
-#[cfg(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-))]
-extern "C" {
-    fn reedsolomon_gal_mul(
-        low: *const u8,
-        high: *const u8,
-        input: *const u8,
-        out: *mut u8,
-        len: libc::size_t,
-    ) -> libc::size_t;
-
-    fn reedsolomon_gal_mul_xor(
-        low: *const u8,
-        high: *const u8,
-        input: *const u8,
-        out: *mut u8,
-        len: libc::size_t,
-    ) -> libc::size_t;
-}
-
-#[cfg(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-))]
-pub fn mul_slice(c: u8, input: &[u8], out: &mut [u8]) {
-    let low: *const u8 = &MUL_TABLE_LOW[c as usize][0];
-    let high: *const u8 = &MUL_TABLE_HIGH[c as usize][0];
-
-    assert_eq!(input.len(), out.len());
-
-    let input_ptr: *const u8 = &input[0];
-    let out_ptr: *mut u8 = &mut out[0];
-    let size: libc::size_t = input.len();
-
-    let bytes_done: usize =
-        unsafe { reedsolomon_gal_mul(low, high, input_ptr, out_ptr, size) as usize };
-
-    mul_slice_pure_rust(c, &input[bytes_done..], &mut out[bytes_done..]);
-}
-
-#[cfg(all(
-    feature = "simd-accel",
-    any(target_arch = "x86_64", target_arch = "aarch64"),
-    not(target_env = "msvc"),
-    not(any(target_os = "android", target_os = "ios"))
-))]
-pub fn mul_slice_xor(c: u8, input: &[u8], out: &mut [u8]) {
-    let low: *const u8 = &MUL_TABLE_LOW[c as usize][0];
-    let high: *const u8 = &MUL_TABLE_HIGH[c as usize][0];
-
-    assert_eq!(input.len(), out.len());
-
-    let input_ptr: *const u8 = &input[0];
-    let out_ptr: *mut u8 = &mut out[0];
-    let size: libc::size_t = input.len();
-
-    let bytes_done: usize =
-        unsafe { reedsolomon_gal_mul_xor(low, high, input_ptr, out_ptr, size) as usize };
-
-    mul_slice_xor_pure_rust(c, &input[bytes_done..], &mut out[bytes_done..]);
+    /*for n in 0..input.len() {
+        out[n] ^= input[n]
+    }*/
 }
 
 #[cfg(test)]
@@ -465,7 +548,7 @@ mod tests {
     fn test_exp() {
         for a in 0..256 {
             let a = a as u8;
-            let mut power = 1u8;
+            let mut power = 1_u8;
             for j in 0..256 {
                 let x = exp(a, j);
                 assert_eq!(x, power);
@@ -550,7 +633,7 @@ mod tests {
     #[test]
     fn test_slice_add() {
         let length_list = [16, 32, 34];
-        for len in length_list.iter() {
+        for len in &length_list {
             let mut input = vec![0; *len];
             fill_random(&mut input);
             let mut output = vec![0; *len];

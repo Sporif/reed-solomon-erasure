@@ -33,7 +33,7 @@ pub struct Matrix<F: Field> {
                                      // the smallvec can hold a matrix of size up to 32x32 in stack
 }
 
-fn calc_matrix_row_start_end(col_count: usize, row: usize) -> (usize, usize) {
+const fn calc_matrix_row_start_end(col_count: usize, row: usize) -> (usize, usize) {
     let start = row * col_count;
     let end = start + col_count;
 
@@ -45,29 +45,29 @@ impl<F: Field> Matrix<F> {
         calc_matrix_row_start_end(self.col_count, row)
     }
 
-    pub fn new(rows: usize, cols: usize) -> Matrix<F> {
+    pub fn new(rows: usize, cols: usize) -> Self {
         let data = SmallVec::from_vec(vec![F::zero(); rows * cols]);
 
-        Matrix {
+        Self {
             row_count: rows,
             col_count: cols,
             data,
         }
     }
 
-    pub fn new_with_data(init_data: Vec<Vec<F::Elem>>) -> Matrix<F> {
+    pub fn new_with_data(init_data: Vec<Vec<F::Elem>>) -> Self {
         let rows = init_data.len();
         let cols = init_data[0].len();
 
-        for r in init_data.iter() {
+        for r in &init_data {
             if r.len() != cols {
-                panic!("Inconsistent row sizes")
+                panic!("Inconsistent row sizes");
             }
         }
 
         let data = SmallVec::from_vec(flatten(init_data));
 
-        Matrix {
+        Self {
             row_count: rows,
             col_count: cols,
             data,
@@ -75,19 +75,19 @@ impl<F: Field> Matrix<F> {
     }
 
     #[cfg(test)]
-    pub fn make_random(size: usize) -> Matrix<F>
+    pub fn make_random(size: usize) -> Self
     where
         rand::distributions::Standard: rand::distributions::Distribution<F::Elem>,
     {
         let mut vec: Vec<Vec<F::Elem>> = vec![vec![Default::default(); size]; size];
-        for v in vec.iter_mut() {
+        for v in &mut vec {
             crate::tests::fill_random(v);
         }
 
-        Matrix::new_with_data(vec)
+        Self::new_with_data(vec)
     }
 
-    pub fn identity(size: usize) -> Matrix<F> {
+    pub fn identity(size: usize) -> Self {
         let mut result = Self::new(size, size);
         for i in 0..size {
             acc!(result, i, i) = F::one();
@@ -104,26 +104,26 @@ impl<F: Field> Matrix<F> {
     }
 
     pub fn get(&self, r: usize, c: usize) -> F::Elem {
-        acc!(self, r, c).clone()
+        acc!(self, r, c)
     }
 
     pub fn set(&mut self, r: usize, c: usize, val: F::Elem) {
         acc!(self, r, c) = val;
     }
 
-    pub fn multiply(&self, rhs: &Matrix<F>) -> Matrix<F> {
+    pub fn multiply(&self, rhs: &Self) -> Self {
         if self.col_count != rhs.row_count {
             panic!(
                 "Colomn count on left is different from row count on right, lhs: {}, rhs: {}",
                 self.col_count, rhs.row_count
-            )
+            );
         }
         let mut result = Self::new(self.row_count, rhs.col_count);
         for r in 0..self.row_count {
             for c in 0..rhs.col_count {
                 let mut val = F::zero();
                 for i in 0..self.col_count {
-                    let mul = F::mul(acc!(self, r, i).clone(), acc!(rhs, i, c).clone());
+                    let mul = F::mul(acc!(self, r, i), acc!(rhs, i, c));
 
                     val = F::add(val, mul);
                 }
@@ -133,32 +133,32 @@ impl<F: Field> Matrix<F> {
         result
     }
 
-    pub fn augment(&self, rhs: &Matrix<F>) -> Matrix<F> {
+    pub fn augment(&self, rhs: &Self) -> Self {
         if self.row_count != rhs.row_count {
             panic!(
                 "Matrices do not have the same row count, lhs: {}, rhs: {}",
                 self.row_count, rhs.row_count
-            )
+            );
         }
         let mut result = Self::new(self.row_count, self.col_count + rhs.col_count);
         for r in 0..self.row_count {
             for c in 0..self.col_count {
-                acc!(result, r, c) = acc!(self, r, c).clone();
+                acc!(result, r, c) = acc!(self, r, c);
             }
             let self_column_count = self.col_count;
             for c in 0..rhs.col_count {
-                acc!(result, r, self_column_count + c) = acc!(rhs, r, c).clone();
+                acc!(result, r, self_column_count + c) = acc!(rhs, r, c);
             }
         }
 
         result
     }
 
-    pub fn sub_matrix(&self, rmin: usize, cmin: usize, rmax: usize, cmax: usize) -> Matrix<F> {
-        let mut result = Self::new(rmax - rmin, cmax - cmin);
+    pub fn sub_matrix(&self, rmin: usize, c_min: usize, rmax: usize, c_max: usize) -> Self {
+        let mut result = Self::new(rmax - rmin, c_max - c_min);
         for r in rmin..rmax {
-            for c in cmin..cmax {
-                acc!(result, r - rmin, c - cmin) = acc!(self, r, c).clone();
+            for c in c_min..c_max {
+                acc!(result, r - rmin, c - c_min) = acc!(self, r, c);
             }
         }
         result
@@ -175,7 +175,6 @@ impl<F: Field> Matrix<F> {
         let (r2_s, _) = self.calc_row_start_end(r2);
 
         if r1 == r2 {
-            return;
         } else {
             for i in 0..self.col_count {
                 self.data.swap(r1_s + i, r2_s + i);
@@ -203,9 +202,9 @@ impl<F: Field> Matrix<F> {
             }
             // Scale to 1.
             if acc!(self, r, r) != F::one() {
-                let scale = F::div(F::one(), acc!(self, r, r).clone());
+                let scale = F::div(F::one(), acc!(self, r, r));
                 for c in 0..self.col_count {
-                    acc!(self, r, c) = F::mul(scale, acc!(self, r, c).clone());
+                    acc!(self, r, c) = F::mul(scale, acc!(self, r, c));
                 }
             }
             // Make everything below the 1 be a 0 by subtracting
@@ -213,12 +212,10 @@ impl<F: Field> Matrix<F> {
             // both exclusive or in the Galois field.)
             for r_below in r + 1..self.row_count {
                 if acc!(self, r_below, r) != F::zero() {
-                    let scale = acc!(self, r_below, r).clone();
+                    let scale = acc!(self, r_below, r);
                     for c in 0..self.col_count {
-                        acc!(self, r_below, c) = F::add(
-                            acc!(self, r_below, c).clone(),
-                            F::mul(scale, acc!(self, r, c).clone()),
-                        );
+                        acc!(self, r_below, c) =
+                            F::add(acc!(self, r_below, c), F::mul(scale, acc!(self, r, c)));
                     }
                 }
             }
@@ -228,12 +225,10 @@ impl<F: Field> Matrix<F> {
         for d in 0..self.row_count {
             for r_above in 0..d {
                 if acc!(self, r_above, d) != F::zero() {
-                    let scale = acc!(self, r_above, d).clone();
+                    let scale = acc!(self, r_above, d);
                     for c in 0..self.col_count {
-                        acc!(self, r_above, c) = F::add(
-                            acc!(self, r_above, c).clone(),
-                            F::mul(scale, acc!(self, d, c).clone()),
-                        );
+                        acc!(self, r_above, c) =
+                            F::add(acc!(self, r_above, c), F::mul(scale, acc!(self, d, c)));
                     }
                 }
             }
@@ -241,9 +236,9 @@ impl<F: Field> Matrix<F> {
         Ok(())
     }
 
-    pub fn invert(&self) -> Result<Matrix<F>, Error> {
+    pub fn invert(&self) -> Result<Self, Error> {
         if !self.is_square() {
-            panic!("Trying to invert a non-square matrix")
+            panic!("Trying to invert a non-square matrix");
         }
 
         let row_count = self.row_count;
@@ -255,7 +250,7 @@ impl<F: Field> Matrix<F> {
         Ok(work.sub_matrix(0, row_count, col_count, col_count * 2))
     }
 
-    pub fn vandermonde(rows: usize, cols: usize) -> Matrix<F> {
+    pub fn vandermonde(rows: usize, cols: usize) -> Self {
         let mut result = Self::new(rows, cols);
 
         for r in 0..rows {

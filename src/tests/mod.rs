@@ -152,7 +152,7 @@ fn test_encoding() {
     );
 
     let mut bad_shards = make_random_shards!(per_shard, 13);
-    bad_shards[0] = vec![0 as u8];
+    bad_shards[0] = vec![0_u8];
     assert_eq!(
         Error::IncorrectShardSize,
         r.encode(&mut bad_shards).unwrap_err()
@@ -250,7 +250,7 @@ fn test_reconstruct() {
         {
             let mut shard_refs: Vec<&mut [u8]> = Vec::with_capacity(3);
 
-            for shard in shards.iter_mut() {
+            for shard in &mut shards {
                 shard_refs.push(shard);
             }
 
@@ -273,7 +273,7 @@ fn test_reconstruct() {
 
             let mut shards = shard_refs
                 .into_iter()
-                .zip(shards_present.iter().cloned())
+                .zip(shards_present.iter().copied())
                 .collect::<Vec<_>>();
 
             r.reconstruct(&mut shards[..]).unwrap();
@@ -302,7 +302,7 @@ fn test_reconstruct() {
 
             let mut shards = shard_refs
                 .into_iter()
-                .zip(shards_present.iter().cloned())
+                .zip(shards_present.iter().copied())
                 .collect::<Vec<_>>();
 
             r.reconstruct_data(&mut shards[..]).unwrap();
@@ -332,7 +332,7 @@ fn test_reconstruct() {
 
             let mut shards = shard_refs
                 .into_iter()
-                .zip(shards_present.iter().cloned())
+                .zip(shards_present.iter().copied())
                 .collect::<Vec<_>>();
 
             r.reconstruct_data(&mut shards[..]).unwrap();
@@ -364,7 +364,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -388,11 +388,11 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for &p in &corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
         let mut slice_present = vec![true; data + parity];
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             slice_present[p] = false;
         }
 
@@ -400,7 +400,7 @@ quickcheck! {
         {
             let mut refs: Vec<_> = shards.iter_mut()
                 .map(|i| &mut i[..])
-                .zip(slice_present.iter().cloned())
+                .zip(slice_present.iter().copied())
                 .collect();
 
             r.reconstruct(&mut refs[..]).unwrap();
@@ -439,7 +439,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -458,7 +458,7 @@ quickcheck! {
         let mut shards = shards_into_option_shards(expect.clone());
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             shards[p] = None;
         }
 
@@ -488,7 +488,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -512,7 +512,7 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
 
@@ -551,7 +551,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -570,7 +570,7 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
 
@@ -811,7 +811,7 @@ fn test_reconstruct_error_handling() {
     {
         let mut shard_refs: Vec<&mut [u8]> = Vec::with_capacity(3);
 
-        for shard in shards.iter_mut() {
+        for shard in &mut shards {
             shard_refs.push(shard);
         }
 
@@ -829,7 +829,7 @@ fn test_reconstruct_error_handling() {
 
         let mut shard_refs: Vec<_> = shard_refs
             .into_iter()
-            .zip(shards_present.iter().cloned())
+            .zip(shards_present.iter().copied())
             .collect();
 
         assert_eq!(
@@ -930,7 +930,7 @@ fn test_verify_shards_with_buffer_incorrect_buffer_sizes() {
 
         let mut buffer = vec![vec![0; 100]; 2];
 
-        assert_eq!(true, r.verify_with_buffer(&shards, &mut buffer).unwrap());
+        assert!(r.verify_with_buffer(&shards, &mut buffer).unwrap());
     }
     {
         // Test having first buffer being empty
@@ -991,10 +991,10 @@ fn test_verify_with_buffer_gives_correct_parity_shards() {
 
     for _ in 0..100 {
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
-        let slices_copy = slices.clone();
+        let slices_copy = slices;
 
         {
             let mut slice_refs = convert_2D_slices!(slices=>to_mut_vec &mut [u8]);
@@ -1008,7 +1008,7 @@ fn test_verify_with_buffer_gives_correct_parity_shards() {
             {
                 let slice_copy_refs = convert_2D_slices!(slices_copy =>to_vec &[u8]);
 
-                for slice in buffer.iter_mut() {
+                for slice in &mut buffer {
                     fill_random(slice);
                 }
 
@@ -1032,7 +1032,7 @@ fn test_verify_with_buffer_gives_correct_parity_shards() {
             {
                 let slice_refs = convert_2D_slices!(slices=>to_vec &[u8]);
 
-                for slice in buffer.iter_mut() {
+                for slice in &mut buffer {
                     fill_random(slice);
                 }
 
@@ -1187,10 +1187,10 @@ fn shardbyshard_encode_correctly() {
         let mut sbs = ShardByShard::new(&r);
 
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
-        let mut slices_copy = slices.clone();
+        let mut slices_copy = slices;
 
         {
             let mut slice_refs = convert_2D_slices!(slices=>to_mut_vec &mut [u8]);
@@ -1240,7 +1240,7 @@ quickcheck! {
         let mut expect = make_random_shards!(size, data + parity);
         let mut shards = expect.clone();
 
-        for _ in 0..1 + reuse {
+        for _ in 0..=reuse {
             {
                 let mut refs =
                     convert_2D_slices!(expect =>to_mut_vec &mut [u8]);
@@ -1267,7 +1267,7 @@ quickcheck! {
             }
         }
 
-        return true;
+        true
     }
 
     fn qc_shardbyshard_encode_same_as_encode_shards(data: usize,
@@ -1292,7 +1292,7 @@ quickcheck! {
 
         r.encode(&mut expect).unwrap();
 
-        for _ in 0..1 + reuse {
+        for _ in 0..=reuse {
             for i in 0..data {
                 assert_eq!(i, sbs.cur_input_index());
 
@@ -1307,7 +1307,7 @@ quickcheck! {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -1344,10 +1344,10 @@ fn shardbyshard_encode_sep_correctly() {
         let mut sbs = ShardByShard::new(&r);
 
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
-        let mut slices_copy = slices.clone();
+        let mut slices_copy = slices;
 
         {
             let (data, parity) = slices.split_at_mut(10);
@@ -1403,7 +1403,7 @@ quickcheck! {
         let mut expect = make_random_shards!(size, data + parity);
         let mut shards = expect.clone();
 
-        for _ in 0..1 + reuse {
+        for _ in 0..=reuse {
             {
                 let (data_shards, parity_shards) =
                     expect.split_at_mut(data);
@@ -1439,7 +1439,7 @@ quickcheck! {
             }
         }
 
-        return true;
+        true
     }
 
     fn qc_shardbyshard_encode_sep_same_as_encode_shards(data: usize,
@@ -1462,7 +1462,7 @@ quickcheck! {
         let mut expect = make_random_shards!(size, data + parity);
         let mut shards = expect.clone();
 
-        for _ in 0..1 + reuse {
+        for _ in 0..=reuse {
             {
                 let (data_shards, parity_shards) =
                     expect.split_at_mut(data);
@@ -1489,7 +1489,7 @@ quickcheck! {
             }
         }
 
-        return true;
+        true
     }
 }
 
@@ -1529,12 +1529,12 @@ fn shardbyshard_encode_correctly_more_rigorous() {
         let mut sbs = ShardByShard::new(&r);
 
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
 
         let mut slices_copy: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices_copy.iter_mut() {
+        for slice in &mut slices_copy {
             fill_random(slice);
         }
 
@@ -1547,7 +1547,7 @@ fn shardbyshard_encode_correctly_more_rigorous() {
             for i in 0..10 {
                 assert_eq!(i, sbs.cur_input_index());
 
-                slice_copy_refs[i].clone_from_slice(&slice_refs[i]);
+                slice_copy_refs[i].clone_from_slice(slice_refs[i]);
                 sbs.encode(&mut slice_copy_refs).unwrap();
                 fill_random(&mut slice_copy_refs[i]);
             }
@@ -1814,7 +1814,7 @@ fn shardbyshard_encode_sep_error_handling() {
         let mut sbs = ShardByShard::new(&r);
 
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
         {
@@ -2220,10 +2220,10 @@ fn test_encode_single_sep() {
     }
     {
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
-        let mut slices_copy = slices.clone();
+        let mut slices_copy = slices;
 
         {
             let mut slice_refs = convert_2D_slices!(slices=>to_mut_vec &mut [u8]);
@@ -2236,7 +2236,7 @@ fn test_encode_single_sep() {
             r.encode(&mut slice_refs).unwrap();
 
             for i in 0..10 {
-                r.encode_single_sep(i, &data_copy_refs[i], &mut parity_copy_refs)
+                r.encode_single_sep(i, data_copy_refs[i], &mut parity_copy_refs)
                     .unwrap();
             }
         }
@@ -2269,10 +2269,10 @@ fn test_encode_sep() {
     }
     {
         let mut slices: [[u8; 100]; 13] = [[0; 100]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
-        let mut slices_copy = slices.clone();
+        let mut slices_copy = slices;
 
         {
             let (data_copy, parity_copy) = slices_copy.split_at_mut(10);
@@ -2350,7 +2350,7 @@ fn test_encode_single_sep_error_handling() {
     }
     {
         let mut slices: [[u8; 1000]; 13] = [[0; 1000]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
 
@@ -2361,33 +2361,33 @@ fn test_encode_single_sep_error_handling() {
             let mut parity_refs = convert_2D_slices!(parity=>to_mut_vec &mut [u8]);
 
             for i in 0..10 {
-                r.encode_single_sep(i, &data_refs[i], &mut parity_refs)
+                r.encode_single_sep(i, data_refs[i], &mut parity_refs)
                     .unwrap();
             }
 
             assert_eq!(
                 Error::InvalidIndex,
-                r.encode_single_sep(10, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(10, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
             assert_eq!(
                 Error::InvalidIndex,
-                r.encode_single_sep(11, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(11, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
             assert_eq!(
                 Error::InvalidIndex,
-                r.encode_single_sep(12, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(12, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
             assert_eq!(
                 Error::InvalidIndex,
-                r.encode_single_sep(13, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(13, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
             assert_eq!(
                 Error::InvalidIndex,
-                r.encode_single_sep(14, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(14, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
         }
@@ -2399,7 +2399,7 @@ fn test_encode_single_sep_error_handling() {
 
             assert_eq!(
                 Error::TooFewParityShards,
-                r.encode_single_sep(0, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(0, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
         }
@@ -2411,7 +2411,7 @@ fn test_encode_single_sep_error_handling() {
 
             assert_eq!(
                 Error::TooManyParityShards,
-                r.encode_single_sep(0, &data_refs[0], &mut parity_refs)
+                r.encode_single_sep(0, data_refs[0], &mut parity_refs)
                     .unwrap_err()
             );
         }
@@ -2468,7 +2468,7 @@ fn test_encode_sep_error_handling() {
     }
     {
         let mut slices: [[u8; 1000]; 13] = [[0; 1000]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
 
@@ -2481,7 +2481,7 @@ fn test_encode_sep_error_handling() {
 
         {
             let mut slices: [[u8; 1000]; 12] = [[0; 1000]; 12];
-            for slice in slices.iter_mut() {
+            for slice in &mut slices {
                 fill_random(slice);
             }
 
@@ -2497,7 +2497,7 @@ fn test_encode_sep_error_handling() {
         }
         {
             let mut slices: [[u8; 1000]; 14] = [[0; 1000]; 14];
-            for slice in slices.iter_mut() {
+            for slice in &mut slices {
                 fill_random(slice);
             }
 
@@ -2513,7 +2513,7 @@ fn test_encode_sep_error_handling() {
         }
         {
             let mut slices: [[u8; 1000]; 12] = [[0; 1000]; 12];
-            for slice in slices.iter_mut() {
+            for slice in &mut slices {
                 fill_random(slice);
             }
 
@@ -2529,7 +2529,7 @@ fn test_encode_sep_error_handling() {
         }
         {
             let mut slices: [[u8; 1000]; 14] = [[0; 1000]; 14];
-            for slice in slices.iter_mut() {
+            for slice in &mut slices {
                 fill_random(slice);
             }
 
@@ -2580,7 +2580,7 @@ fn test_encode_single_error_handling() {
     }
     {
         let mut slices: [[u8; 1000]; 13] = [[0; 1000]; 13];
-        for slice in slices.iter_mut() {
+        for slice in &mut slices {
             fill_random(slice);
         }
 

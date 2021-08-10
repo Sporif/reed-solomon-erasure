@@ -7,19 +7,43 @@
 //! You will have to implement error detection separately (e.g. via checksums)
 //! and simply leave out the corrupted shards when attempting to reconstruct
 //! the missing data.
-#![allow(dead_code)]
+
+#![cfg_attr(
+    feature = "unstable",
+    feature(
+        stdsimd,
+        avx512_target_feature,
+        aarch64_target_feature,
+        arm_target_feature
+    )
+)]
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    // clippy::cargo,
+)]
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    clippy::cognitive_complexity,
+    clippy::doc_markdown,
+    clippy::inline_always,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::must_use_candidate,
+    clippy::many_single_char_names,
+    clippy::needless_range_loop,
+    clippy::shadow_unrelated,
+    clippy::similar_names,
+    clippy::too_many_lines
+)]
 
 #[cfg(test)]
 #[macro_use]
 extern crate quickcheck;
-
-#[cfg(test)]
-extern crate rand;
-
-extern crate smallvec;
-
-#[cfg(feature = "simd-accel")]
-extern crate libc;
 
 use std::iter::{self, FromIterator};
 
@@ -30,6 +54,7 @@ mod core;
 mod errors;
 mod inversion_tree;
 mod matrix;
+mod platform;
 
 #[cfg(test)]
 mod tests;
@@ -37,11 +62,25 @@ mod tests;
 pub mod galois_16;
 pub mod galois_8;
 
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+mod galois_8_avx2;
+#[cfg(all(any(target_arch = "x86_64", target_arch = "x86"), feature = "unstable"))]
+mod galois_8_avx512;
+#[cfg(all(
+    any(target_arch = "arm", target_arch = "aarch64"),
+    feature = "unstable"
+))]
+mod galois_8_neon;
+#[cfg(any(target_arch = "x86_64", target_arch = "x86"))]
+mod galois_8_sse3;
+
 pub use crate::errors::Error;
 pub use crate::errors::SBSError;
 
 pub use crate::core::ReedSolomon;
 pub use crate::core::ShardByShard;
+
+type Result<T> = std::result::Result<T, std::result::Result<T, Error>>;
 
 /// A finite field to perform encoding over.
 pub trait Field: Sized {
@@ -76,8 +115,8 @@ pub trait Field: Sized {
     /// Assignment is arbitrary but must be unique to `n`.
     fn nth(n: usize) -> Self::Elem {
         if n >= Self::ORDER {
-            let pow = (Self::ORDER as f32).log(2.0) as usize;
-            panic!("{} out of bounds for GF(2^{}) member", n, pow)
+            let pow = (Self::ORDER as f32).log2() as usize;
+            panic!("{} out of bounds for GF(2^{}) member", n, pow);
         }
 
         Self::nth_internal(n)
@@ -91,7 +130,7 @@ pub trait Field: Sized {
         assert_eq!(input.len(), out.len());
 
         for (i, o) in input.iter().zip(out) {
-            *o = Self::mul(elem.clone(), i.clone())
+            *o = Self::mul(elem, *i);
         }
     }
 
@@ -104,7 +143,7 @@ pub trait Field: Sized {
         assert_eq!(input.len(), out.len());
 
         for (i, o) in input.iter().zip(out) {
-            *o = Self::add(o.clone(), Self::mul(elem.clone(), i.clone()))
+            *o = Self::add(*o, Self::mul(elem, *i));
         }
     }
 }
@@ -117,15 +156,17 @@ pub trait ReconstructShard<F: Field> {
     /// The size of the shard data; `None` if empty.
     fn len(&self) -> Option<usize>;
 
+    /// Returns `true` if the slice has a length of 0.
+    fn is_empty(&self) -> bool {
+        self.len().is_none()
+    }
+
     /// Get a mutable reference to the shard data, returning `None` if uninitialized.
     fn get(&mut self) -> Option<&mut [F::Elem]>;
 
     /// Get a mutable reference to the shard data, initializing it to the
     /// given length if it was `None`. Returns an error if initialization fails.
-    fn get_or_initialize(
-        &mut self,
-        len: usize,
-    ) -> Result<&mut [F::Elem], Result<&mut [F::Elem], Error>>;
+    fn get_or_initialize(&mut self, len: usize) -> Result<&mut [F::Elem]>;
 }
 
 impl<F: Field, T: AsRef<[F::Elem]> + AsMut<[F::Elem]> + FromIterator<F::Elem>> ReconstructShard<F>
@@ -136,13 +177,10 @@ impl<F: Field, T: AsRef<[F::Elem]> + AsMut<[F::Elem]> + FromIterator<F::Elem>> R
     }
 
     fn get(&mut self) -> Option<&mut [F::Elem]> {
-        self.as_mut().map(|x| x.as_mut())
+        self.as_mut().map(AsMut::as_mut)
     }
 
-    fn get_or_initialize(
-        &mut self,
-        len: usize,
-    ) -> Result<&mut [F::Elem], Result<&mut [F::Elem], Error>> {
+    fn get_or_initialize(&mut self, len: usize) -> Result<&mut [F::Elem]> {
         let is_some = self.is_some();
         let x = self
             .get_or_insert_with(|| iter::repeat(F::zero()).take(len).collect())
@@ -158,25 +196,22 @@ impl<F: Field, T: AsRef<[F::Elem]> + AsMut<[F::Elem]> + FromIterator<F::Elem>> R
 
 impl<F: Field, T: AsRef<[F::Elem]> + AsMut<[F::Elem]>> ReconstructShard<F> for (T, bool) {
     fn len(&self) -> Option<usize> {
-        if !self.1 {
-            None
-        } else {
+        if self.1 {
             Some(self.0.as_ref().len())
+        } else {
+            None
         }
     }
 
     fn get(&mut self) -> Option<&mut [F::Elem]> {
-        if !self.1 {
-            None
-        } else {
+        if self.1 {
             Some(self.0.as_mut())
+        } else {
+            None
         }
     }
 
-    fn get_or_initialize(
-        &mut self,
-        len: usize,
-    ) -> Result<&mut [F::Elem], Result<&mut [F::Elem], Error>> {
+    fn get_or_initialize(&mut self, len: usize) -> Result<&mut [F::Elem]> {
         let x = self.0.as_mut();
         if x.len() == len {
             if self.1 {

@@ -1,4 +1,3 @@
-use std;
 use std::fmt::Formatter;
 
 #[derive(PartialEq, Debug, Clone, Copy)]
@@ -19,7 +18,7 @@ pub enum Error {
 }
 
 impl Error {
-    fn to_string(&self) -> &str {
+    const fn as_str(&self) -> &str {
         match *self {
             Error::TooFewShards=> "The number of provided shards is smaller than the one in codec",
             Error::TooManyShards => "The number of provided shards is greater than the one in codec",
@@ -40,13 +39,13 @@ impl Error {
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.as_str())
     }
 }
 
 impl std::error::Error for Error {
     fn description(&self) -> &str {
-        self.to_string()
+        self.as_str()
     }
 }
 
@@ -58,24 +57,24 @@ pub enum SBSError {
 }
 
 impl SBSError {
-    fn to_string(&self) -> &str {
+    const fn as_str(&self) -> &str {
         match *self {
             SBSError::TooManyCalls => "Too many calls",
             SBSError::LeftoverShards => "Leftover shards",
-            SBSError::RSError(ref e) => e.to_string(),
+            SBSError::RSError(ref e) => e.as_str(),
         }
     }
 }
 
 impl std::fmt::Display for SBSError {
     fn fmt(&self, f: &mut Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{}", self.to_string())
+        write!(f, "{}", self.as_str())
     }
 }
 
 impl std::error::Error for SBSError {
     fn description(&self) -> &str {
-        self.to_string()
+        self.as_str()
     }
 }
 

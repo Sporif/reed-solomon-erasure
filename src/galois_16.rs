@@ -63,25 +63,25 @@ struct Element(pub [u8; 2]);
 
 impl Element {
     // Create the zero element.
-    fn zero() -> Self {
-        Element([0, 0])
+    const fn zero() -> Self {
+        Self([0, 0])
     }
 
     // A constant element evaluating to `n`.
-    fn constant(n: u8) -> Element {
-        Element([0, n])
+    const fn constant(n: u8) -> Self {
+        Self([0, n])
     }
 
     // Whether this is the zero element.
-    fn is_zero(&self) -> bool {
+    fn is_zero(self) -> bool {
         self.0 == [0; 2]
     }
 
-    fn exp(mut self, n: usize) -> Element {
+    fn exp(mut self, n: usize) -> Self {
         if n == 0 {
-            Element::constant(1)
-        } else if self == Element::zero() {
-            Element::zero()
+            Self::constant(1)
+        } else if self == Self::zero() {
+            Self::zero()
         } else {
             let x = self;
             for _ in 1..n {
@@ -103,50 +103,50 @@ impl Element {
             x[2] ^= galois_8::mul(EXT_POLY[2], x[0]);
         }
 
-        Element([x[1], x[2]])
+        Self([x[1], x[2]])
     }
 
-    fn degree(&self) -> usize {
-        if self.0[0] != 0 {
-            1
-        } else {
+    const fn degree(self) -> usize {
+        if self.0[0] == 0 {
             0
+        } else {
+            1
         }
     }
 }
 
 impl From<[u8; 2]> for Element {
     fn from(c: [u8; 2]) -> Self {
-        Element(c)
+        Self(c)
     }
 }
 
 impl Default for Element {
     fn default() -> Self {
-        Element::zero()
+        Self::zero()
     }
 }
 
 impl Add for Element {
-    type Output = Element;
+    type Output = Self;
 
-    fn add(self, other: Self) -> Element {
-        Element([self.0[0] ^ other.0[0], self.0[1] ^ other.0[1]])
+    fn add(self, other: Self) -> Self {
+        Self([self.0[0] ^ other.0[0], self.0[1] ^ other.0[1]])
     }
 }
 
 impl Sub for Element {
-    type Output = Element;
+    type Output = Self;
 
-    fn sub(self, other: Self) -> Element {
+    fn sub(self, other: Self) -> Self {
         self.add(other)
     }
 }
 
 impl Mul for Element {
-    type Output = Element;
+    type Output = Self;
 
-    fn mul(self, rhs: Self) -> Element {
+    fn mul(self, rhs: Self) -> Self {
         // FOIL; our elements are linear at most, with two coefficients
         let out: [u8; 3] = [
             galois_8::mul(self.0[0], rhs.0[0]),
@@ -157,22 +157,23 @@ impl Mul for Element {
             galois_8::mul(self.0[1], rhs.0[1]),
         ];
 
-        Element::reduce_from(out)
+        Self::reduce_from(out)
     }
 }
 
 impl Mul<u8> for Element {
-    type Output = Element;
+    type Output = Self;
 
-    fn mul(self, rhs: u8) -> Element {
-        Element([galois_8::mul(rhs, self.0[0]), galois_8::mul(rhs, self.0[1])])
+    fn mul(self, rhs: u8) -> Self {
+        Self([galois_8::mul(rhs, self.0[0]), galois_8::mul(rhs, self.0[1])])
     }
 }
 
 impl Div for Element {
-    type Output = Element;
+    type Output = Self;
 
-    fn div(self, rhs: Self) -> Element {
+    #[allow(clippy::suspicious_arithmetic_impl)]
+    fn div(self, rhs: Self) -> Self {
         self * rhs.inverse()
     }
 }
@@ -188,32 +189,32 @@ enum EgcdRhs {
 impl Element {
     // compute extended euclidean algorithm against an element of self,
     // where the GCD is known to be constant.
-    fn const_egcd(self, rhs: EgcdRhs) -> (u8, Element, Element) {
+    fn const_egcd(self, rhs: &EgcdRhs) -> (u8, Self, Self) {
         if self.is_zero() {
             let rhs = match rhs {
                 EgcdRhs::Element(elem) => elem,
                 EgcdRhs::ExtPoly => panic!("const_egcd invoked with divisible"),
             };
-            (rhs.0[1], Element::constant(0), Element::constant(1))
+            (rhs.0[1], Self::constant(0), Self::constant(1))
         } else {
             let (cur_quotient, cur_remainder) = match rhs {
                 EgcdRhs::Element(rhs) => rhs.polynom_div(self),
-                EgcdRhs::ExtPoly => Element::div_ext_by(self),
+                EgcdRhs::ExtPoly => Self::div_ext_by(self),
             };
 
             // GCD is constant because EXT_POLY is irreducible
-            let (g, x, y) = cur_remainder.const_egcd(EgcdRhs::Element(self));
+            let (g, x, y) = cur_remainder.const_egcd(&EgcdRhs::Element(self));
             (g, y + (cur_quotient * x), x)
         }
     }
 
     // divide EXT_POLY by self.
-    fn div_ext_by(rhs: Self) -> (Element, Element) {
+    fn div_ext_by(rhs: Self) -> (Self, Self) {
         if rhs.degree() == 0 {
             // dividing by constant is the same as multiplying by another constant.
             // and all constant multiples of EXT_POLY are in the equivalence class
             // of 0.
-            return (Element::zero(), Element::zero());
+            return (Self::zero(), Self::zero());
         }
 
         // divisor is ensured linear here.
@@ -232,28 +233,28 @@ impl Element {
             }
         }
 
-        let remainder = Element::constant(poly[2]);
-        let quotient = Element([poly[0], poly[1]]) * leading_mul_inv;
+        let remainder = Self::constant(poly[2]);
+        let quotient = Self([poly[0], poly[1]]) * leading_mul_inv;
 
         (quotient, remainder)
     }
 
-    fn polynom_div(self, rhs: Self) -> (Element, Element) {
+    fn polynom_div(self, rhs: Self) -> (Self, Self) {
         let divisor_degree = rhs.degree();
         if rhs.is_zero() {
             panic!("divide by 0");
         } else if self.degree() < divisor_degree {
             // If divisor's degree (len-1) is bigger, all dividend is a remainder
-            (Element::zero(), self)
+            (Self::zero(), self)
         } else if divisor_degree == 0 {
             // divide by constant.
             let invert = galois_8::div(1, rhs.0[1]);
-            let quotient = Element([
+            let quotient = Self([
                 galois_8::mul(invert, self.0[0]),
                 galois_8::mul(invert, self.0[1]),
             ]);
 
-            (quotient, Element::zero())
+            (quotient, Self::zero())
         } else {
             // self degree is at least divisor degree, divisor degree not 0.
             // therefore both are 1.
@@ -262,7 +263,7 @@ impl Element {
 
             // ensure rhs is constant.
             let leading_mul_inv = galois_8::div(1, rhs.0[0]);
-            let monic = Element([
+            let monic = Self([
                 galois_8::mul(leading_mul_inv, rhs.0[0]),
                 galois_8::mul(leading_mul_inv, rhs.0[1]),
             ]);
@@ -275,14 +276,14 @@ impl Element {
             }
 
             (
-                Element::constant(galois_8::mul(leading_mul_inv, leading_coeff)),
-                Element::constant(remainder),
+                Self::constant(galois_8::mul(leading_mul_inv, leading_coeff)),
+                Self::constant(remainder),
             )
         }
     }
 
     /// Convert the inverse of this field element. Panics if zero.
-    fn inverse(self) -> Element {
+    fn inverse(self) -> Self {
         if self.is_zero() {
             panic!("Cannot invert 0");
         }
@@ -294,13 +295,16 @@ impl Element {
             let remainder = self;
 
             // GCD is constant because EXT_POLY is irreducible
-            let (g, x, _) = remainder.const_egcd(EgcdRhs::ExtPoly);
+            let (g, x, _) = remainder.const_egcd(&EgcdRhs::ExtPoly);
 
             (g, x)
         };
 
         // we still need to normalize it by dividing by the gcd
-        if gcd != 0 {
+        if gcd == 0 {
+            // self is equivalent to zero.
+            panic!("Cannot invert 0");
+        } else {
             // EXT_POLY is irreducible so the GCD will always be constant.
             // EXT_POLY*x + self*y = gcd
             // self*y = gcd - EXT_POLY*x
@@ -308,9 +312,6 @@ impl Element {
             // EXT_POLY*x is representative of the equivalence class of 0.
             let normalizer = galois_8::div(1, gcd);
             y * normalizer
-        } else {
-            // self is equivalent to zero.
-            panic!("Cannot invert 0");
         }
     }
 }
@@ -325,7 +326,7 @@ mod tests {
             let a = u8::arbitrary(gen);
             let b = u8::arbitrary(gen);
 
-            Element([a, b])
+            Self([a, b])
         }
     }
 
@@ -350,6 +351,7 @@ mod tests {
             }
         }
 
+        #[allow(clippy::eq_op)]
         fn qc_add_commutativity(a: Element, b: Element) -> bool {
             a + b == b + a
         }
@@ -407,6 +409,6 @@ mod tests {
 
     #[test]
     fn zero_to_zero_is_one() {
-        assert_eq!(Element::zero().exp(0), Element::constant(1))
+        assert_eq!(Element::zero().exp(0), Element::constant(1));
     }
 }

@@ -45,7 +45,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -69,11 +69,11 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for &p in &corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
         let mut slice_present = vec![true; data + parity];
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             slice_present[p] = false;
         }
 
@@ -81,7 +81,7 @@ quickcheck! {
         {
             let mut refs: Vec<_> = shards.iter_mut()
                 .map(|i| &mut i[..])
-                .zip(slice_present.iter().cloned())
+                .zip(slice_present.iter().copied())
                 .collect();
 
             r.reconstruct(&mut refs[..]).unwrap();
@@ -120,7 +120,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -139,7 +139,7 @@ quickcheck! {
         let mut shards = shards_into_option_shards(expect.clone());
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             shards[p] = None;
         }
 
@@ -169,7 +169,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -193,7 +193,7 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for p in corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
 
@@ -232,7 +232,7 @@ quickcheck! {
         for _ in 0..corrupt {
             let mut pos = rand::random::<usize>() % (data + parity);
 
-            while let Some(_) = corrupt_pos_s.iter().find(|&&x| x == pos) {
+            while corrupt_pos_s.iter().any(|&x| x == pos) {
                 pos = rand::random::<usize>() % (data + parity);
             }
 
@@ -251,7 +251,7 @@ quickcheck! {
         let mut shards = expect.clone();
 
         // corrupt shards
-        for &p in corrupt_pos_s.iter() {
+        for &p in &corrupt_pos_s {
             fill_random(&mut shards[p]);
         }
 
