@@ -281,6 +281,7 @@ pub fn mul_slice_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platform) {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Platform::AVX512 => {
             // AVX512 implementation not enabled by default.
+            // Safe because detect() checked for platform support.
             #[cfg(feature = "unstable")]
             {
                 unsafe { crate::galois_8_avx512::gal_mul(low, high, input_ptr, out_ptr, size) }
@@ -341,6 +342,8 @@ pub fn mul_slice_xor_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platfor
         // Safe because detect() checked for platform support.
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         Platform::AVX512 => {
+            // AVX512 implementation not enabled by default.
+            // Safe because detect() checked for platform support.
             #[cfg(feature = "unstable")]
             {
                 unsafe { crate::galois_8_avx512::gal_mul_xor(low, high, input_ptr, out_ptr, size) }

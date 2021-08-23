@@ -39,7 +39,7 @@ unsafe fn set1_epi8_v(c: u8) -> Vec {
 #[inline(always)]
 unsafe fn srli_epi64_v<const N: i32>(in_0: Vec) -> Vec {
     Vec {
-        uint8x16: vshrq_n_u8(in_0.uint8x16, N),
+        uint8x16: vshrq_n_u8::<N>(in_0.uint8x16),
     }
 }
 
