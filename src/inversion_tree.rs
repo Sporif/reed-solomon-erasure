@@ -1,6 +1,6 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::matrix::Matrix;
 use crate::Field;
@@ -41,15 +41,15 @@ impl<F: Field> InversionTree<F> {
         }
     }
 
-    pub fn with_limit(data_shards: usize, parity_shards: usize, indices_limit: usize) -> InversionTree<F> {
-        InversionTree {
+    pub fn with_limit(data_shards: usize, parity_shards: usize, indices_limit: usize) -> Self {
+        Self {
             root: Mutex::new(InversionNode::new(
                 Some(Arc::new(Matrix::identity(data_shards))),
                 data_shards + parity_shards,
             )),
             total_shards: data_shards + parity_shards,
             total_indices: AtomicUsize::new(0),
-            indices_limit: indices_limit,
+            indices_limit,
         }
     }
 
@@ -89,7 +89,7 @@ impl<F: Field> InversionTree<F> {
         total_indices += invalid_indices.len();
 
         if total_indices >= self.indices_limit {
-            self.root.lock().unwrap().evict( invalid_indices.len() );
+            self.root.lock().unwrap().evict(invalid_indices.len());
         } else {
             self.total_indices.store(total_indices, Ordering::Relaxed);
         }
@@ -109,12 +109,10 @@ impl<F: Field> InversionTree<F> {
     }
 }
 
-fn get_petals<F: Field>(
-    node: &mut Option<InversionNode<F>>
-) -> Vec<&mut Option<InversionNode<F>>> {
+fn get_petals<F: Field>(node: &mut Option<InversionNode<F>>) -> Vec<&mut Option<InversionNode<F>>> {
     let mut petals = vec![];
     if let Some(some_node) = node {
-        for child_node in some_node.children.iter_mut() {
+        for child_node in &mut some_node.children {
             if let Some(node) = child_node {
                 if node.children.is_empty() {
                     petals.push(child_node);
@@ -134,7 +132,11 @@ impl<F: Field> InversionNode<F> {
         for _ in 0..children_count {
             children.push(None);
         }
-        Self { matrix, children, used: 0 }
+        Self {
+            matrix,
+            children,
+            used: 0,
+        }
     }
 
     fn get_child(
@@ -150,14 +152,12 @@ impl<F: Field> InversionNode<F> {
                 None => {
                     *node = Some(Self::new(None, total_shards - offset));
                 }
-                Some(_) => {
-                    match self.children[node_index] {
-                        None => panic!(),
-                        Some(ref mut x) => {
-                            x.used += 1;
-                        },
+                Some(_) => match self.children.get_mut(node_index) {
+                    None | Some(None) => panic!(),
+                    Some(Some(ref mut x)) => {
+                        x.used += 1;
                     }
-                }
+                },
             }
         }
         match self.children.get_mut(node_index) {
@@ -207,12 +207,9 @@ impl<F: Field> InversionNode<F> {
     /// this function is getting very end leafs of trea
     /// removing least used one
     /// for count to clean be 0
-    pub fn evict(
-        &mut self,
-        count: usize,
-    ) {
+    pub fn evict(&mut self, count: usize) {
         let mut petals = vec![];
-        for child_node in self.children.iter_mut() {
+        for child_node in &mut self.children {
             let child_petals = get_petals(child_node);
             petals.extend(child_petals);
         }
