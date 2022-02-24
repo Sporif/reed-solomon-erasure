@@ -37,5 +37,5 @@ coveralls = { repository = "darrenldl/reed-solomon-erasure" }
 smallvec = "1.2"
 
 [dev-dependencies]
-rand = "0.7.2"
-quickcheck = "0.9"
+rand = "0.8.5"
+quickcheck = "1.0.3"

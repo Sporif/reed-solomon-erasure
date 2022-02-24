@@ -406,7 +406,7 @@ mod tests {
     }
 
     impl Arbitrary for QCTreeTestParam {
-        fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        fn arbitrary(g: &mut Gen) -> Self {
             let size = g.size();
 
             let matrix_count = 5 + size % 100;
