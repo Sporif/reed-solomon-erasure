@@ -60,9 +60,7 @@ impl<F: Field> Matrix<F> {
         let cols = init_data[0].len();
 
         for r in &init_data {
-            if r.len() != cols {
-                panic!("Inconsistent row sizes");
-            }
+            assert!(!(r.len() != cols), "Inconsistent row sizes");
         }
 
         let data = SmallVec::from_vec(flatten(init_data));
@@ -112,12 +110,12 @@ impl<F: Field> Matrix<F> {
     }
 
     pub fn multiply(&self, rhs: &Self) -> Self {
-        if self.col_count != rhs.row_count {
-            panic!(
-                "Colomn count on left is different from row count on right, lhs: {}, rhs: {}",
-                self.col_count, rhs.row_count
-            );
-        }
+        assert!(
+            !(self.col_count != rhs.row_count),
+            "Colomn count on left is different from row count on right, lhs: {}, rhs: {}",
+            self.col_count,
+            rhs.row_count
+        );
         let mut result = Self::new(self.row_count, rhs.col_count);
         for r in 0..self.row_count {
             for c in 0..rhs.col_count {
@@ -134,12 +132,12 @@ impl<F: Field> Matrix<F> {
     }
 
     pub fn augment(&self, rhs: &Self) -> Self {
-        if self.row_count != rhs.row_count {
-            panic!(
-                "Matrices do not have the same row count, lhs: {}, rhs: {}",
-                self.row_count, rhs.row_count
-            );
-        }
+        assert!(
+            !(self.row_count != rhs.row_count),
+            "Matrices do not have the same row count, lhs: {}, rhs: {}",
+            self.row_count,
+            rhs.row_count
+        );
         let mut result = Self::new(self.row_count, self.col_count + rhs.col_count);
         for r in 0..self.row_count {
             for c in 0..self.col_count {
@@ -237,9 +235,7 @@ impl<F: Field> Matrix<F> {
     }
 
     pub fn invert(&self) -> Result<Self, Error> {
-        if !self.is_square() {
-            panic!("Trying to invert a non-square matrix");
-        }
+        assert!(self.is_square(), "Trying to invert a non-square matrix");
 
         let row_count = self.row_count;
         let col_count = self.col_count;

@@ -1549,7 +1549,7 @@ fn shardbyshard_encode_correctly_more_rigorous() {
 
                 slice_copy_refs[i].clone_from_slice(slice_refs[i]);
                 sbs.encode(&mut slice_copy_refs).unwrap();
-                fill_random(&mut slice_copy_refs[i]);
+                fill_random(slice_copy_refs[i]);
             }
         }
 

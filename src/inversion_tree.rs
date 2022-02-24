@@ -41,18 +41,6 @@ impl<F: Field> InversionTree<F> {
         }
     }
 
-    pub fn with_limit(data_shards: usize, parity_shards: usize, indices_limit: usize) -> Self {
-        Self {
-            root: Mutex::new(InversionNode::new(
-                Some(Arc::new(Matrix::identity(data_shards))),
-                data_shards + parity_shards,
-            )),
-            total_shards: data_shards + parity_shards,
-            total_indices: AtomicUsize::new(0),
-            indices_limit,
-        }
-    }
-
     pub fn get_inverted_matrix(&self, invalid_indices: &[usize]) -> Option<Arc<Matrix<F>>> {
         if invalid_indices.is_empty() {
             match self.root.lock().unwrap().matrix {
@@ -173,7 +161,7 @@ impl<F: Field> InversionNode<F> {
         offset: usize,
     ) -> Option<Arc<Matrix<F>>> {
         if invalid_indices.is_empty() {
-            self.matrix.as_ref().map(|m| Arc::clone(m))
+            self.matrix.as_ref().map(Arc::clone)
         } else {
             let requested_index = invalid_indices[0];
             let remaining_indices = &invalid_indices[1..];

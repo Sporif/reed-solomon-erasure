@@ -284,9 +284,7 @@ impl Element {
 
     /// Convert the inverse of this field element. Panics if zero.
     fn inverse(self) -> Self {
-        if self.is_zero() {
-            panic!("Cannot invert 0");
-        }
+        assert!(!self.is_zero(), "Cannot invert 0");
 
         // first step of extended euclidean algorithm.
         // done here because EXT_POLY is outside the scope of `Element`.
