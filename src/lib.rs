@@ -66,9 +66,9 @@ pub mod galois_8;
 mod galois_8_avx2;
 #[cfg(all(any(target_arch = "x86_64", target_arch = "x86"), feature = "unstable"))]
 mod galois_8_avx512;
-#[cfg(all(
-    any(target_arch = "arm", target_arch = "aarch64"),
-    feature = "unstable"
+#[cfg(any(
+    target_arch = "aarch64",
+    all(target_arch = "arm", feature = "unstable")
 ))]
 mod galois_8_neon;
 #[cfg(any(target_arch = "x86_64", target_arch = "x86"))]

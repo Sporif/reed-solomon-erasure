@@ -291,9 +291,14 @@ pub fn mul_slice_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platform) {
                 unsafe { crate::galois_8_avx2::gal_mul(low, high, input_ptr, out_ptr, size) }
             }
         }
-        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+        // Safe because detect() checked for platform support.
+        #[cfg(target_arch = "aarch64")]
+        Platform::NEON => unsafe {
+            crate::galois_8_neon::gal_mul(low, high, input_ptr, out_ptr, size)
+        },
+        #[cfg(target_arch = "arm")]
         Platform::NEON => {
-            // NEON implementation not enabled by default.
+            // NEON on arm implementation not enabled by default.
             // Safe because detect() checked for platform support.
             #[cfg(feature = "unstable")]
             {
@@ -353,9 +358,14 @@ pub fn mul_slice_xor_simd(c: u8, input: &[u8], out: &mut [u8], platform: Platfor
                 unsafe { crate::galois_8_avx2::gal_mul_xor(low, high, input_ptr, out_ptr, size) }
             }
         }
-        #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
+        // Safe because detect() checked for platform support.
+        #[cfg(target_arch = "aarch64")]
+        Platform::NEON => unsafe {
+            crate::galois_8_neon::gal_mul_xor(low, high, input_ptr, out_ptr, size)
+        },
+        #[cfg(target_arch = "arm")]
         Platform::NEON => {
-            // NEON implementation not enabled by default.
+            // NEON for arm implementation not enabled by default.
             // Safe because detect() checked for platform support.
             #[cfg(feature = "unstable")]
             {
