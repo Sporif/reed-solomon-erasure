@@ -17,8 +17,9 @@ license = "MIT"
 [features]
 default = []
 
-# Use this feature to enable unstable AVX512 and NEON on arm support (on nightly only)
-# Otherwise AVX512 will use avx2 and NEON on arm will use pure rust
+# Use this feature to enable unstable avx512 and neon on arm support (nightly only)
+# Otherwise x86/X86_64 will be limited to avx2 and arm will use pure rust
+# Note: neon on aarch64 does not require this feature
 unstable = []
 
 # Use these features to override detected levels of support

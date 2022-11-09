@@ -13,7 +13,6 @@
     feature(
         stdsimd,
         avx512_target_feature,
-        aarch64_target_feature,
         arm_target_feature
     )
 )]

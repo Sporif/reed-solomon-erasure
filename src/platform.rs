@@ -1,4 +1,9 @@
-#![allow(dead_code)]
+#![allow(
+    dead_code,
+    unreachable_code,
+    clippy::missing_const_for_fn,
+    clippy::upper_case_acronyms
+)]
 
 #[derive(Clone, Copy, Debug)]
 pub enum Platform {
@@ -14,7 +19,6 @@ pub enum Platform {
 }
 
 impl Platform {
-    #[allow(unreachable_code)]
     pub fn detect() -> Self {
         #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
         {
@@ -42,7 +46,6 @@ impl Platform {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
-#[allow(unreachable_code)]
 pub fn avx512_detected() -> bool {
     if cfg!(feature = "no_avx512") {
         return false;
@@ -56,7 +59,6 @@ pub fn avx512_detected() -> bool {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
-#[allow(unreachable_code)]
 pub fn avx2_detected() -> bool {
     if cfg!(feature = "no_avx2") {
         return false;
@@ -70,7 +72,6 @@ pub fn avx2_detected() -> bool {
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 #[inline(always)]
-#[allow(unreachable_code)]
 pub fn sse3_detected() -> bool {
     if cfg!(feature = "no_sse3") {
         return false;
@@ -84,21 +85,27 @@ pub fn sse3_detected() -> bool {
 
 #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
 #[inline(always)]
-#[allow(unreachable_code)]
 pub fn neon_detected() -> bool {
     if cfg!(feature = "no_neon") {
         return false;
     }
-    #[cfg(any(
-        target_arch = "aarch64",
-        all(target_feature = "v7", target_feature = "neon")
-    ))]
+    #[cfg(target_arch = "aarch64")]
     {
-        return true;
+        // Neon is always enabled on android aarch64 targets
+        #[cfg(any(target_feature = "neon", target_os = "android"))]
+        {
+            return true;
+        }
+        return std::arch::is_aarch64_feature_detected!("neon");
     }
     #[cfg(all(target_arch = "arm", feature = "unstable"))]
     {
-        return is_arm_feature_detected!("neon");
+        #[cfg(all(target_feature = "neon", target_feature = "v7"))]
+        {
+            return true;
+        }
+        return std::arch::is_arm_feature_detected!("neon") &&
+               std::arch::is_arm_feature_detected!("v7");
     }
     false
 }
